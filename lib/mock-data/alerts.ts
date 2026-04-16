@@ -1,0 +1,268 @@
+import type { Alert } from "@/lib/types";
+import { PLANTS } from "@/lib/mock-data/plants";
+
+const PLANT_NAMES = Object.fromEntries(
+  PLANTS.map((plant) => [plant.id, plant.name]),
+) as Record<string, string>;
+
+const OXFORD = PLANT_NAMES["plant-1"];
+const WARREN = PLANT_NAMES["plant-2"];
+const LANSING = PLANT_NAMES["plant-3"];
+const DETROIT = PLANT_NAMES["plant-4"];
+
+export const MOCK_ALERTS: Alert[] = [
+  {
+    id: "alert-plant-2-scrap",
+    severity: "critical",
+    status: "open",
+    plantId: "plant-2",
+    plantName: WARREN,
+    metric: "scrapRate",
+    title: "Seat trim scrap exceeded the rolling quality baseline",
+    summary:
+      `${WARREN} scrap has climbed for seven consecutive days and now sits materially above its recent operating band on the truck-seat build.`,
+    detectedAt: "2026-04-15T09:24:00Z",
+    changeVsBaseline: 0.014,
+    drivers: [
+      "Tool wear on trim Line 4",
+      "Rework loop time is climbing",
+      "Second-shift overtime on seat assembly",
+    ],
+    sources: ["MES", "CMMS"],
+    chartPoints: [
+      { label: "Apr 11", value: 0.05, baseline: 0.041 },
+      { label: "Apr 12", value: 0.051, baseline: 0.041 },
+      { label: "Apr 13", value: 0.053, baseline: 0.042 },
+      { label: "Apr 14", value: 0.054, baseline: 0.042 },
+      { label: "Apr 15", value: 0.056, baseline: 0.042 },
+    ],
+  },
+  {
+    id: "alert-plant-2-inventory",
+    severity: "medium",
+    status: "open",
+    plantId: "plant-2",
+    plantName: WARREN,
+    metric: "inventoryHealth",
+    title: "Critical trim coverage is slipping below the safe buffer",
+    summary:
+      `${WARREN} still shows enough inventory on paper, but unstable scrap consumption is draining high-risk foam and trim material faster than planned.`,
+    detectedAt: "2026-04-15T09:01:00Z",
+    changeVsBaseline: -0.05,
+    drivers: [
+      "Scrap burn on Line 4",
+      "Late trim replenishment",
+      "Short-term sequencing overrides",
+    ],
+    sources: ["ERP", "MES"],
+    chartPoints: [
+      { label: "Apr 11", value: 0.79, baseline: 0.83 },
+      { label: "Apr 12", value: 0.78, baseline: 0.83 },
+      { label: "Apr 13", value: 0.77, baseline: 0.82 },
+      { label: "Apr 14", value: 0.77, baseline: 0.82 },
+      { label: "Apr 15", value: 0.76, baseline: 0.81 },
+    ],
+  },
+  {
+    id: "alert-plant-2-downtime",
+    severity: "high",
+    status: "open",
+    plantId: "plant-2",
+    plantName: WARREN,
+    metric: "downtime",
+    title: "Downtime escalation is now concentrated in maintenance and tooling",
+    summary:
+      `Downtime minutes continue to rise in ${WARREN}, making it the biggest contributor to the current network OEE decline.`,
+    detectedAt: "2026-04-15T08:52:00Z",
+    changeVsBaseline: 24,
+    drivers: [
+      "Maintenance queue backlog",
+      "Unplanned trim-tool replacement",
+      "Extended changeovers after quality holds",
+    ],
+    sources: ["CMMS", "MES"],
+    chartPoints: [
+      { label: "Apr 11", value: 126, baseline: 108 },
+      { label: "Apr 12", value: 129, baseline: 108 },
+      { label: "Apr 13", value: 133, baseline: 109 },
+      { label: "Apr 14", value: 137, baseline: 109 },
+      { label: "Apr 15", value: 141, baseline: 110 },
+    ],
+  },
+  {
+    id: "alert-plant-3-otif",
+    severity: "high",
+    status: "watch",
+    plantId: "plant-3",
+    plantName: LANSING,
+    metric: "otif",
+    title: "OTIF is softening despite strong production performance",
+    summary:
+      `${LANSING} output remains healthy, but outbound service has slipped as staging and packaging queues tighten.`,
+    detectedAt: "2026-04-15T07:15:00Z",
+    changeVsBaseline: -0.04,
+    drivers: [
+      "Trailer staging congestion",
+      "Late packaging confirmations",
+      "Expedite mix pressure",
+    ],
+    sources: ["ERP", "MES"],
+    chartPoints: [
+      { label: "Apr 11", value: 0.92, baseline: 0.95 },
+      { label: "Apr 12", value: 0.92, baseline: 0.95 },
+      { label: "Apr 13", value: 0.91, baseline: 0.95 },
+      { label: "Apr 14", value: 0.91, baseline: 0.95 },
+      { label: "Apr 15", value: 0.9, baseline: 0.95 },
+    ],
+  },
+  {
+    id: "alert-plant-3-packaging",
+    severity: "medium",
+    status: "watch",
+    plantId: "plant-3",
+    plantName: LANSING,
+    metric: "downtime",
+    title: "Packaging verification delays are starting to erode outbound flow",
+    summary:
+      `${LANSING} line performance remains strong overall, but repeated verification and staging interruptions are now feeding the OTIF slowdown.`,
+    detectedAt: "2026-04-15T07:02:00Z",
+    changeVsBaseline: 9,
+    drivers: [
+      "Verification resets on Pack Line 2",
+      "Late changeover signoff",
+      "Accumulation lane congestion",
+    ],
+    sources: ["MES", "CMMS"],
+    chartPoints: [
+      { label: "Apr 11", value: 61, baseline: 56 },
+      { label: "Apr 12", value: 62, baseline: 56 },
+      { label: "Apr 13", value: 63, baseline: 56 },
+      { label: "Apr 14", value: 61, baseline: 56 },
+      { label: "Apr 15", value: 60, baseline: 56 },
+    ],
+  },
+  {
+    id: "alert-plant-4-inventory",
+    severity: "medium",
+    status: "watch",
+    plantId: "plant-4",
+    plantName: DETROIT,
+    metric: "inventoryHealth",
+    title: "Inventory imbalance is creating localized kit shortages",
+    summary:
+      `${DETROIT} still has enough inventory overall, but coverage is mismatched across critical seat and interior assemblies.`,
+    detectedAt: "2026-04-15T06:40:00Z",
+    changeVsBaseline: -0.06,
+    drivers: [
+      "Uneven replenishment timing",
+      "Component mix skew",
+      "Slow transfer approvals",
+    ],
+    sources: ["ERP"],
+    chartPoints: [
+      { label: "Apr 11", value: 0.74, baseline: 0.79 },
+      { label: "Apr 12", value: 0.73, baseline: 0.79 },
+      { label: "Apr 13", value: 0.72, baseline: 0.79 },
+      { label: "Apr 14", value: 0.72, baseline: 0.79 },
+      { label: "Apr 15", value: 0.71, baseline: 0.79 },
+    ],
+  },
+  {
+    id: "alert-plant-4-downtime",
+    severity: "medium",
+    status: "watch",
+    plantId: "plant-4",
+    plantName: DETROIT,
+    metric: "downtime",
+    title: "Changeover drag is extending Detroit final assembly windows",
+    summary:
+      `${DETROIT} downtime is not spiking into crisis territory, but changeover drag is stacking on top of inventory friction and slowing schedule recovery.`,
+    detectedAt: "2026-04-15T06:18:00Z",
+    changeVsBaseline: 8,
+    drivers: [
+      "Mixed-model sequencing",
+      "Late kit substitutions",
+      "Supervisor approvals after holds",
+    ],
+    sources: ["MES", "CMMS"],
+    chartPoints: [
+      { label: "Apr 11", value: 95, baseline: 89 },
+      { label: "Apr 12", value: 97, baseline: 89 },
+      { label: "Apr 13", value: 98, baseline: 90 },
+      { label: "Apr 14", value: 96, baseline: 90 },
+      { label: "Apr 15", value: 97, baseline: 90 },
+    ],
+  },
+  {
+    id: "alert-plant-1-watch",
+    severity: "low",
+    status: "watch",
+    plantId: "plant-1",
+    plantName: OXFORD,
+    metric: "downtime",
+    title: "Minor trim changeover variability is worth monitoring",
+    summary:
+      `${OXFORD} remains healthy overall, though changeover minutes ticked up enough to keep a low-severity watch open.`,
+    detectedAt: "2026-04-15T05:32:00Z",
+    changeVsBaseline: 5,
+    drivers: ["Product-family mix shift", "New operator rotation"],
+    sources: ["MES"],
+    chartPoints: [
+      { label: "Apr 11", value: 72, baseline: 68 },
+      { label: "Apr 12", value: 74, baseline: 68 },
+      { label: "Apr 13", value: 70, baseline: 68 },
+      { label: "Apr 14", value: 68, baseline: 68 },
+      { label: "Apr 15", value: 69, baseline: 68 },
+    ],
+  },
+  {
+    id: "alert-plant-1-otif",
+    severity: "low",
+    status: "watch",
+    plantId: "plant-1",
+    plantName: OXFORD,
+    metric: "otif",
+    title: "A small pocket of expedite sequenced orders slipped late",
+    summary:
+      `${OXFORD} remains the benchmark site, but two expedite seat sets missed the normal outbound window after a short-term product mix shift.`,
+    detectedAt: "2026-04-15T05:11:00Z",
+    changeVsBaseline: -0.01,
+    drivers: [
+      "Short-term product mix swing",
+      "New outbound coordinator rotation",
+    ],
+    sources: ["ERP", "MES"],
+    chartPoints: [
+      { label: "Apr 11", value: 0.95, baseline: 0.96 },
+      { label: "Apr 12", value: 0.95, baseline: 0.96 },
+      { label: "Apr 13", value: 0.95, baseline: 0.96 },
+      { label: "Apr 14", value: 0.95, baseline: 0.96 },
+      { label: "Apr 15", value: 0.96, baseline: 0.96 },
+    ],
+  },
+  {
+    id: "alert-plant-3-scrap-resolved",
+    severity: "low",
+    status: "resolved",
+    plantId: "plant-3",
+    plantName: LANSING,
+    metric: "scrapRate",
+    title: "Surface-finish scrap spike has returned to normal range",
+    summary:
+      `A short-lived finish defect spike earlier in the week was contained, and scrap has moved back into ${LANSING}'s expected operating band.`,
+    detectedAt: "2026-04-14T17:08:00Z",
+    changeVsBaseline: -0.002,
+    drivers: [
+      "Coating temperature correction",
+      "Hold-and-release review completed",
+    ],
+    sources: ["MES"],
+    chartPoints: [
+      { label: "Apr 10", value: 0.028, baseline: 0.028 },
+      { label: "Apr 11", value: 0.027, baseline: 0.028 },
+      { label: "Apr 12", value: 0.026, baseline: 0.028 },
+      { label: "Apr 13", value: 0.026, baseline: 0.028 },
+      { label: "Apr 14", value: 0.026, baseline: 0.028 },
+    ],
+  },
+];
