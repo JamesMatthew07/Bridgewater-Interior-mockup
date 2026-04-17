@@ -1,6 +1,11 @@
 import "server-only";
 
-import { buildFallbackQueryResponse, buildModelPayload } from "@/lib/ai/query-context";
+import {
+  buildFallbackQueryResponse,
+  buildModelPayload,
+  buildOutOfScopeQueryResponse,
+  isSystemScopedQuestion,
+} from "@/lib/ai/query-context";
 import type { AiAnswer, QueryRequest, QueryResponse } from "@/lib/types";
 
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
@@ -112,6 +117,10 @@ function parseAiAnswer(raw: string) {
 export async function resolveOpenAiCompatibleQuery(
   request: QueryRequest,
 ): Promise<QueryResponse> {
+  if (!isSystemScopedQuestion(request)) {
+    return buildOutOfScopeQueryResponse(request);
+  }
+
   const fallback = buildFallbackQueryResponse(request);
   const config = getClientConfig();
 
@@ -135,7 +144,7 @@ export async function resolveOpenAiCompatibleQuery(
           {
             role: "system",
             content:
-              "You are an operations intelligence assistant for a manufacturing dashboard. Use only the provided structured data. The retrievedContext section is the highest-priority grounding and represents the most relevant operating records for the question. When the user does not explicitly ask for a time window, synthesize the overall Bridgewater operating picture from the full provided scope rather than narrowing to a short window. Never invent plants, metrics, trends, or causes. Return valid JSON only, with no markdown, no prose outside JSON, and exactly this shape: {\"question\":string,\"summary\":string,\"insights\":string[],\"context\":{\"timeRange\":string,\"plants\":string[],\"sources\":string[]},\"chart\":{\"type\":\"line\"|\"bar\"|\"area\",\"title\":string,\"subtitle\"?:string,\"series\":[{\"label\":string,\"value\":number,\"baseline\"?:number}]},\"confidence\":\"high\"|\"medium\"|\"low\",\"recommendedActions\":string[]}. Write a direct summary, then use insights and recommendedActions to add concrete operational context, comparisons, and next steps.",
+              "You are an operations intelligence assistant for a manufacturing dashboard. Use only the provided structured data. The retrievedContext section is the highest-priority grounding and represents the most relevant operating records for the question. When the user does not explicitly ask for a time window, synthesize the overall Bridgewater operating picture from the full provided scope rather than narrowing to a short window. If the question is outside Bridgewater operations data scope, refuse it and say you can only answer from the Bridgewater dashboard dataset. Never invent plants, metrics, trends, causes, math answers, or general-knowledge facts. Return valid JSON only, with no markdown, no prose outside JSON, and exactly this shape: {\"question\":string,\"summary\":string,\"insights\":string[],\"context\":{\"timeRange\":string,\"plants\":string[],\"sources\":string[]},\"chart\":{\"type\":\"line\"|\"bar\"|\"area\",\"title\":string,\"subtitle\"?:string,\"series\":[{\"label\":string,\"value\":number,\"baseline\"?:number}]},\"confidence\":\"high\"|\"medium\"|\"low\",\"recommendedActions\":string[]}. Write a direct summary, then use insights and recommendedActions to add concrete operational context, comparisons, and next steps.",
           },
           {
             role: "user",

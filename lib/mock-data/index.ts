@@ -44,6 +44,8 @@ const RANGE_WINDOWS: Record<TimeRange, number> = {
   month_to_date: 15,
 };
 
+const GENERATED_AT_DATE = new Date(GENERATED_AT);
+
 const OVERVIEW_INSIGHTS: InsightCard[] = [
   {
     id: "network-risk",
@@ -145,6 +147,44 @@ function round(value: number, digits = 3) {
 
 function clamp(value: number, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value));
+}
+
+function startOfUtcDay(date: Date) {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+}
+
+function addUtcDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function monthStartUtc(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+function isAlertInTimeRange(alert: Alert, timeRange: TimeRange) {
+  const detectedAt = new Date(alert.detectedAt);
+  const todayStart = startOfUtcDay(GENERATED_AT_DATE);
+
+  switch (timeRange) {
+    case "today":
+      return detectedAt >= todayStart && detectedAt <= GENERATED_AT_DATE;
+    case "yesterday": {
+      const yesterdayStart = addUtcDays(todayStart, -1);
+      return detectedAt >= yesterdayStart && detectedAt < todayStart;
+    }
+    case "last_7_days":
+      return detectedAt >= addUtcDays(todayStart, -6) && detectedAt <= GENERATED_AT_DATE;
+    case "last_30_days":
+      return detectedAt >= addUtcDays(todayStart, -29) && detectedAt <= GENERATED_AT_DATE;
+    case "month_to_date":
+      return detectedAt >= monthStartUtc(GENERATED_AT_DATE) && detectedAt <= GENERATED_AT_DATE;
+    default:
+      return true;
+  }
 }
 
 function getWindow(points: TimeSeriesPoint[], timeRange: TimeRange) {
@@ -262,10 +302,8 @@ function aggregateOverviewTrend(timeRange: TimeRange) {
   });
 }
 
-function getActiveAlertsForPlant(plantId: string) {
-  return MOCK_ALERTS.filter(
-    (alert) => alert.plantId === plantId && alert.status !== "resolved",
-  );
+function getActiveAlertsForPlant(plantId: string, timeRange: TimeRange) {
+  return getAlerts({ plantId, timeRange }).filter((alert) => alert.status !== "resolved");
 }
 
 function buildComparisonRow(plant: Plant, timeRange: TimeRange): ComparisonRow {
@@ -274,7 +312,7 @@ function buildComparisonRow(plant: Plant, timeRange: TimeRange): ComparisonRow {
     current,
     getPreviousWindow(PLANT_TIME_SERIES[plant.id], timeRange),
   );
-  const alerts = getActiveAlertsForPlant(plant.id);
+  const alerts = getActiveAlertsForPlant(plant.id, timeRange);
   const severityWeight = alerts.reduce((total, alert) => {
     const weightMap = { critical: 24, high: 16, medium: 9, low: 4 };
     return total + weightMap[alert.severity];
@@ -334,7 +372,7 @@ export function getOverviewData(timeRange: TimeRange = "last_7_days"): OverviewD
       (left, right) => right.riskIndex - left.riskIndex,
     ),
     trends: overviewTrend,
-    alerts: getAlerts(),
+    alerts: getAlerts({ timeRange }),
     insights: OVERVIEW_INSIGHTS,
   };
 }
@@ -368,6 +406,10 @@ export function getPlantDetail(
 
 export function getAlerts(filters: AlertFilters = {}): Alert[] {
   const filtered = MOCK_ALERTS.filter((alert) => {
+    if (filters.timeRange && !isAlertInTimeRange(alert, filters.timeRange)) {
+      return false;
+    }
+
     if (filters.plantId && alert.plantId !== filters.plantId) {
       return false;
     }
@@ -593,7 +635,7 @@ function buildNetworkFallbackAnswer(
   const serviceWatchPlant = comparisonByOtif[0];
   const inventoryWatchPlant = comparisonByInventory[0];
   const scrapWatchPlant = comparisonByScrap[0];
-  const scopedAlerts = getAlerts().filter(
+  const scopedAlerts = getAlerts({ timeRange }).filter(
     (alert) => plantIds.length === 0 || plantIds.includes(alert.plantId),
   );
   const topAlerts = scopedAlerts.slice(0, 2);

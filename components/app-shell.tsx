@@ -89,6 +89,7 @@ export function AppShell({
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-current={active ? "page" : undefined}
                   className={cn(
                     "group flex items-center justify-between rounded-[1.35rem] px-4 py-3.5 text-sm transition-all",
                     active
@@ -108,7 +109,14 @@ export function AppShell({
                       <Icon className="h-4 w-4" />
                     </span>
                     <span className="space-y-0.5">
-                      <span className="block font-semibold">{item.label}</span>
+                      <span
+                        className={cn(
+                          "block font-semibold",
+                          active ? "text-white" : "text-[var(--color-foreground)]",
+                        )}
+                      >
+                        {item.label}
+                      </span>
                       <span
                         className={cn(
                           "block text-xs",

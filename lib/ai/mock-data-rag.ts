@@ -169,7 +169,7 @@ function describeMetric(metric: KpiMetric) {
 function buildRagDocuments(timeRange: TimeRange): RagDocument[] {
   const overview = getOverviewData(timeRange);
   const plants = getPlants();
-  const alerts = getAlerts();
+  const alerts = getAlerts({ timeRange });
   const documents: RagDocument[] = [];
 
   const topRisk = overview.comparison[0];
