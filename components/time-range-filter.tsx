@@ -1,8 +1,19 @@
-import Link from "next/link";
+"use client";
 
+import { useRouter } from "next/navigation";
+import { CalendarRange } from "lucide-react";
+
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { TIME_RANGE_OPTIONS } from "@/lib/site";
 import { buildHref, type SearchParamsInput } from "@/lib/url-state";
-import { cn } from "@/lib/utils";
 import type { TimeRange } from "@/lib/types";
 
 export function TimeRangeFilter({
@@ -14,29 +25,39 @@ export function TimeRangeFilter({
   currentRange: TimeRange;
   searchParams?: SearchParamsInput;
 }) {
-  return (
-    <nav
-      aria-label="Time range filters"
-      className="flex flex-wrap gap-2 rounded-[calc(var(--radius)*1.25)] border border-[var(--color-border)]/85 bg-white/72 p-1.5 shadow-[var(--shadow-panel)]"
-    >
-      {TIME_RANGE_OPTIONS.map((option) => {
-        const active = option.value === currentRange;
+  const router = useRouter();
 
-        return (
-          <Link
-            key={option.value}
-            href={buildHref(pathname, searchParams, { range: option.value })}
-            className={cn(
-              "rounded-full px-3.5 py-2 text-sm font-medium",
-              active
-                ? "bg-[var(--color-primary)] !text-white shadow-[0_14px_28px_-24px_rgba(24,59,90,0.95)] hover:!text-white focus:!text-white active:!text-white visited:!text-white"
-                : "text-[var(--color-muted-foreground)] hover:bg-[var(--color-secondary)] hover:text-[var(--color-foreground)]",
-            )}
-          >
-            {option.label}
-          </Link>
+  return (
+    <Select
+      value={currentRange}
+      onValueChange={(value) => {
+        router.replace(
+          buildHref(pathname, searchParams, { range: value }),
+          { scroll: false },
         );
-      })}
-    </nav>
+      }}
+    >
+      <SelectTrigger
+        aria-label="Time range filters"
+        className="min-w-[188px] bg-white/78 pr-3"
+      >
+        <span className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
+          <CalendarRange className="h-4 w-4 shrink-0 text-[var(--color-primary)]" />
+          <span className="min-w-0 truncate">
+            <SelectValue />
+          </span>
+        </span>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          <SelectLabel>Time range</SelectLabel>
+          {TIME_RANGE_OPTIONS.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   );
 }

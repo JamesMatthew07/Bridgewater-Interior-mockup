@@ -9,6 +9,8 @@ import {
 } from "@/lib/mock-data";
 import type { QueryRequest, QueryResponse, TimeRange } from "@/lib/types";
 
+export const DEFAULT_QUERY_TIME_RANGE: TimeRange = "last_30_days";
+
 export interface QueryContextSnapshot {
   question: string;
   timeRange: TimeRange;
@@ -19,10 +21,51 @@ export interface QueryContextSnapshot {
   grounding: ReturnType<typeof retrieveMockDataContext>;
 }
 
+export function resolveQueryTimeRange(
+  question: string,
+  requestedTimeRange?: TimeRange,
+): TimeRange {
+  if (requestedTimeRange) {
+    return requestedTimeRange;
+  }
+
+  const normalized = question.toLowerCase();
+
+  if (normalized.includes("month to date") || normalized.includes("mtd")) {
+    return "month_to_date";
+  }
+
+  if (normalized.includes("last 30")) {
+    return "last_30_days";
+  }
+
+  if (
+    normalized.includes("last 7") ||
+    normalized.includes("this week") ||
+    normalized.includes("past week")
+  ) {
+    return "last_7_days";
+  }
+
+  if (normalized.includes("yesterday")) {
+    return "yesterday";
+  }
+
+  if (
+    normalized.includes("today") ||
+    normalized.includes("right now") ||
+    normalized.includes("current")
+  ) {
+    return "today";
+  }
+
+  return DEFAULT_QUERY_TIME_RANGE;
+}
+
 export function resolveQueryContext(
   request: QueryRequest,
 ): QueryContextSnapshot {
-  const timeRange = request.timeRange ?? "last_7_days";
+  const timeRange = resolveQueryTimeRange(request.question, request.timeRange);
   const overview = getOverviewData(timeRange);
   const matchedPlantIds = resolvePlantIdsFromQuestion(
     request.question,
@@ -44,6 +87,7 @@ export function resolveQueryContext(
     resolvedPlantIds.includes(alert.plantId),
   );
   const grounding = retrieveMockDataContext({
+    ...request,
     question: request.question,
     timeRange,
     plantIds: request.plantIds,
@@ -80,6 +124,7 @@ export function buildModelPayload(request: QueryRequest) {
 
   return {
     question: snapshot.question,
+    queryScope: request.timeRange ? "requested_time_range" : "overall_network_data",
     timeRange: snapshot.timeRange,
     plantScope: snapshot.plantIds.map((plantId) => ({
       plantId,

@@ -32,7 +32,10 @@ export async function POST(request: Request) {
 
   const queryRequest: QueryRequest = {
     question: body.question.trim(),
-    timeRange: coerceTimeRange(body.timeRange),
+    timeRange:
+      typeof body.timeRange === "string"
+        ? coerceTimeRange(body.timeRange)
+        : undefined,
     plantIds: Array.isArray(body.plantIds)
       ? body.plantIds.filter((plantId): plantId is string => typeof plantId === "string")
       : undefined,

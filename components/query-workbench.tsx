@@ -1,84 +1,35 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { History, LoaderCircle, SendHorizonal, Sparkles } from "lucide-react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { LoaderCircle, SendHorizonal, Sparkles } from "lucide-react";
 
 import { buildFallbackQueryResponse } from "@/lib/ai/query-context";
-import { AiAnswerCard } from "@/components/ai-answer-card";
-import { SupportingChart } from "@/components/charts/supporting-chart";
-import { QueryGroundingCard } from "@/components/query-grounding-card";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { buildHref, type SearchParamsInput } from "@/lib/url-state";
-import type {
-  QueryPreset,
-  QueryRequest,
-  QueryResponse,
-  TimeRange,
-} from "@/lib/types";
+import type { AiAnswer, QueryRequest, QueryResponse } from "@/lib/types";
 
-const HISTORY_KEY = "bwi-query-history";
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  answer?: AiAnswer;
+}
 
-function QueryResultLoader() {
+function AssistantReplyLoader() {
   return (
-    <>
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--color-primary)]/12 text-[var(--color-primary)]">
-              <LoaderCircle className="h-5 w-5 animate-spin" />
-            </div>
-            <div className="space-y-1">
-              <CardTitle>Generating Grounded Answer</CardTitle>
-              <CardDescription>
-                Retrieving Bridgewater operating records and assembling the response for your question.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Skeleton className="h-5 w-2/3" />
-          <Skeleton className="h-20 w-full rounded-2xl" />
-          <Skeleton className="h-20 w-full rounded-2xl" />
-          <Skeleton className="h-16 w-full rounded-2xl" />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Retrieved Bridgewater Context</CardTitle>
-          <CardDescription>
-            Ranking the most relevant facilities, alerts, and KPI trends from the local dataset.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          <Skeleton className="h-24 w-full rounded-2xl" />
-          <Skeleton className="h-24 w-full rounded-2xl" />
-          <Skeleton className="h-24 w-full rounded-2xl" />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Preparing Chart</CardTitle>
-          <CardDescription>
-            Building the chart-backed evidence for the answer.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-[320px] w-full rounded-2xl" />
-        </CardContent>
-      </Card>
-    </>
+    <div className="flex gap-3">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-primary)]/12 text-[var(--color-primary)]">
+        <LoaderCircle className="h-5 w-5 animate-spin" />
+      </div>
+      <div className="max-w-3xl rounded-[1.75rem] border border-[var(--color-border)]/80 bg-white/86 px-5 py-4 shadow-[var(--shadow-panel)]">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-muted-foreground)]">
+          Assistant
+        </p>
+        <p className="mt-2 text-sm leading-7 text-[var(--color-muted-foreground)]">
+          Reviewing network KPIs, plant trends, alerts, and inventory signals...
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -98,77 +49,131 @@ async function requestQueryAnswer(payload: QueryRequest) {
   return (await response.json()) as QueryResponse;
 }
 
+function AssistantMessage({
+  answer,
+  content,
+}: {
+  answer?: AiAnswer;
+  content: string;
+}) {
+  if (!answer) {
+    return (
+      <p className="mt-2 text-base leading-8 text-[var(--color-foreground)]">
+        {content}
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-2 space-y-4 text-[var(--color-foreground)]">
+      <p className="text-base leading-8">{answer.summary}</p>
+
+      {answer.insights.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-muted-foreground)]">
+            What The Data Says
+          </p>
+          <ul className="space-y-2 pl-5 text-sm leading-7 text-[var(--color-muted-foreground)]">
+            {answer.insights.map((insight) => (
+              <li key={insight} className="list-disc">
+                {insight}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {answer.recommendedActions.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-muted-foreground)]">
+            Recommended Actions
+          </p>
+          <ul className="space-y-2 pl-5 text-sm leading-7 text-[var(--color-muted-foreground)]">
+            {answer.recommendedActions.map((action) => (
+              <li key={action} className="list-disc">
+                {action}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <p className="border-t border-[var(--color-border)]/70 pt-3 text-xs leading-6 text-[var(--color-muted-foreground)]">
+        Coverage: {answer.context.plants.join(", ")}. Sources: {answer.context.sources.join(", ")}.
+        Confidence: {answer.confidence}.
+      </p>
+    </div>
+  );
+}
+
 export function QueryWorkbench({
-  presets,
   initialQuestion,
-  initialRange,
   initialResponse,
-  initialSearchParams,
   autoRunFromUrl,
 }: {
-  presets: QueryPreset[];
   initialQuestion: string;
-  initialRange: TimeRange;
-  initialResponse: QueryResponse;
-  initialSearchParams: SearchParamsInput;
+  initialResponse: QueryResponse | null;
   autoRunFromUrl: boolean;
 }) {
-  const router = useRouter();
   const [draft, setDraft] = useState(initialQuestion);
-  const [result, setResult] = useState(initialResponse);
-  const [history, setHistory] = useState<string[]>(
-    [initialQuestion, ...presets.slice(0, 3).map((preset) => preset.question)].filter(
-      (value, index, values) => value && values.indexOf(value) === index,
-    ),
+  const [messages, setMessages] = useState<ChatMessage[]>(() =>
+    initialResponse
+      ? [
+          {
+            id: "initial-user",
+            role: "user",
+            content: initialResponse.answer.question,
+          },
+          {
+            id: "initial-assistant",
+            role: "assistant",
+            content: initialResponse.answer.summary,
+            answer: initialResponse.answer,
+          },
+        ]
+      : [],
   );
   const [isLoading, setIsLoading] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
   const lastAutoRunKey = useRef<string | null>(null);
+  const messageCounter = useRef(messages.length);
+  const bottomAnchorRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const storedHistory = window.sessionStorage.getItem(HISTORY_KEY);
-      const parsedHistory = storedHistory
-        ? (JSON.parse(storedHistory) as string[])
-        : [];
-      const merged = [
-        initialQuestion,
-        ...parsedHistory,
-        ...presets.slice(0, 3).map((preset) => preset.question),
-      ].filter((value, index, values) => value && values.indexOf(value) === index);
-
-      setHistory(merged.slice(0, 6));
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [initialQuestion, presets]);
-
-  useEffect(() => {
-    window.sessionStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  }, [history]);
-
-  function syncUrl(question: string) {
-    router.replace(
-      buildHref("/query", initialSearchParams, {
-        range: initialRange,
-        q: question || undefined,
-      }),
-      { scroll: false },
-    );
+  function nextMessageId(role: ChatMessage["role"]) {
+    messageCounter.current += 1;
+    return `${role}-${messageCounter.current}`;
   }
 
-  function rememberQuestion(question: string) {
-    setHistory((current) =>
-      [question, ...current.filter((item) => item !== question)].slice(0, 6),
-    );
+  function appendMessage(role: ChatMessage["role"], content: string) {
+    const message = {
+      id: nextMessageId(role),
+      role,
+      content,
+    } satisfies ChatMessage;
+
+    setMessages((current) => [
+      ...current,
+      message,
+    ]);
   }
 
-  function runQuestion(
+  function appendAssistantAnswer(answer: AiAnswer) {
+    const message = {
+      id: nextMessageId("assistant"),
+      role: "assistant",
+      content: answer.summary,
+      answer,
+    } satisfies ChatMessage;
+
+    setMessages((current) => [
+      ...current,
+      message,
+    ]);
+  }
+
+  function submitQuestion(
     question: string,
     options?: {
-      persist?: boolean;
-      updateUrl?: boolean;
-      silenceNetworkNotice?: boolean;
+      clearThread?: boolean;
     },
   ) {
     const trimmed = question.trim();
@@ -177,51 +182,51 @@ export function QueryWorkbench({
       return;
     }
 
-    setDraft(trimmed);
-    setNotice(null);
+    const userMessage = {
+      id: nextMessageId("user"),
+      role: "user",
+      content: trimmed,
+    } satisfies ChatMessage;
 
-    if (options?.updateUrl ?? true) {
-      syncUrl(trimmed);
-    }
-
-    if (options?.persist ?? true) {
-      rememberQuestion(trimmed);
-    }
+    setDraft("");
+    setMessages((current) =>
+      options?.clearThread
+        ? [userMessage]
+        : [...current, userMessage],
+    );
 
     setIsLoading(true);
 
     void requestQueryAnswer({
       question: trimmed,
-      timeRange: initialRange,
     })
       .then((response) => {
-        setResult(response);
+        appendAssistantAnswer(response.answer);
       })
       .catch(() => {
-        setResult(
-          buildFallbackQueryResponse({
-            question: trimmed,
-            timeRange: initialRange,
-          }),
-        );
+        const fallback = buildFallbackQueryResponse({
+          question: trimmed,
+        });
 
-        if (!options?.silenceNetworkNotice) {
-          setNotice(
-            "The live query service was not reachable, so the local Bridgewater retrieval layer is still in view.",
-          );
-        }
+        appendAssistantAnswer(fallback.answer);
       })
       .finally(() => {
         setIsLoading(false);
       });
   }
 
+  const autoRunQuestion = useEffectEvent((question: string) => {
+    submitQuestion(question, {
+      clearThread: true,
+    });
+  });
+
   useEffect(() => {
-    if (!autoRunFromUrl) {
+    if (!autoRunFromUrl || !initialQuestion) {
       return;
     }
 
-    const autoRunKey = `${initialRange}:${initialQuestion}`;
+    const autoRunKey = initialQuestion;
 
     if (lastAutoRunKey.current === autoRunKey) {
       return;
@@ -229,174 +234,112 @@ export function QueryWorkbench({
 
     lastAutoRunKey.current = autoRunKey;
     const frame = window.requestAnimationFrame(() => {
-      setIsLoading(true);
-
-      void requestQueryAnswer({
-        question: initialQuestion,
-        timeRange: initialRange,
-      })
-        .then((response) => {
-          setResult(response);
-        })
-        .catch(() => {
-          setResult(
-            buildFallbackQueryResponse({
-              question: initialQuestion,
-              timeRange: initialRange,
-            }),
-          );
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
+      autoRunQuestion(initialQuestion);
     });
 
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [autoRunFromUrl, initialQuestion, initialRange]);
+  }, [autoRunFromUrl, initialQuestion]);
+
+  useEffect(() => {
+    bottomAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, isLoading]);
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
-      <aside className="xl:sticky xl:top-28 xl:self-start">
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--color-primary)]/12 text-[var(--color-primary)]">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div className="space-y-1">
-                <CardTitle>Ask Operations AI</CardTitle>
-                <CardDescription>
-                  Query results stay grounded in local KPI, alert, facility, and trend data.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <form
-              className="space-y-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                runQuestion(draft);
-              }}
-            >
-              <Textarea
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder="Ask about Warren risk, Oxford benchmarking, Detroit inventory, Lansing OTIF, or cross-facility trends."
-                aria-label="Operations question"
-                disabled={isLoading}
-              />
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                    Generating Answer...
-                  </>
-                ) : (
-                  <>
-                    <SendHorizonal className="h-4 w-4" />
-                    Generate Answer
-                  </>
-                )}
-              </Button>
-            </form>
+    <section className="mx-auto flex min-h-[calc(100svh-10rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-[var(--color-border)]/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(243,246,248,0.72))] shadow-[var(--shadow-app)]">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--color-border)]/75 px-5 py-4 md:px-7">
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-muted-foreground)]">
+            Bridgewater AI Chat
+          </p>
+          <h1 className="text-xl font-semibold tracking-[-0.03em] text-[var(--color-foreground)]">
+            Ask operations questions
+          </h1>
+        </div>
+      </div>
 
-            <div className="rounded-[calc(var(--radius)*1.2)] bg-[var(--color-secondary)]/72 px-4 py-4 text-sm leading-6 text-[var(--color-muted-foreground)]">
-              {isLoading
-                ? "Processing the question now. The app is retrieving the most relevant Bridgewater operating records before assembling the answer."
-                : notice ??
-                  "If live model credentials are configured, this page will try a real model first and fall back to the local Bridgewater retrieval layer automatically."}
-            </div>
-
-            <div className="space-y-3 border-t border-[var(--color-border)]/75 pt-6">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[var(--color-foreground)]">
-                    Suggested questions
-                  </p>
-                  <p className="text-sm text-[var(--color-muted-foreground)]">
-                    Prompts aligned to the strongest Bridgewater data storylines.
-                  </p>
+      <div aria-live="polite" className="flex-1 overflow-y-auto px-5 py-6 md:px-7">
+        {messages.length > 0 || isLoading ? (
+          <div className="space-y-6">
+            {messages.map((message) =>
+              message.role === "user" ? (
+                <div key={message.id} className="flex justify-end">
+                  <div className="max-w-3xl rounded-[1.75rem] bg-[var(--color-primary)] px-5 py-4 text-white shadow-[0_24px_40px_-30px_rgba(24,59,90,0.9)]">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/72">
+                      You
+                    </p>
+                    <p className="mt-2 text-base leading-7">{message.content}</p>
+                  </div>
                 </div>
-                <span className="rounded-full border border-[var(--color-border)] bg-white/72 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-                  {presets.length} presets
-                </span>
-              </div>
-              <div className="grid gap-2">
-                {presets.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => runQuestion(preset.question)}
-                    disabled={isLoading}
-                    className="rounded-[calc(var(--radius)*1.05)] border border-[var(--color-border)] bg-white/72 px-4 py-3 text-left text-sm leading-6 text-[var(--color-foreground)] hover:bg-[var(--color-secondary)]"
-                  >
-                    <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-                      {preset.label}
-                    </span>
-                    <span className="mt-2 block">{preset.question}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-3 border-t border-[var(--color-border)]/75 pt-6">
-              <div className="flex items-center gap-3">
-                <History className="h-5 w-5 text-[var(--color-muted-foreground)]" />
-                <div>
-                  <p className="text-sm font-semibold text-[var(--color-foreground)]">
-                    Session history
-                  </p>
-                  <p className="text-sm text-[var(--color-muted-foreground)]">
-                    Recent prompts persist for this browser session.
-                  </p>
+              ) : (
+                <div key={message.id} className="flex gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-primary)]/12 text-[var(--color-primary)]">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <div className="max-w-3xl rounded-[1.75rem] border border-[var(--color-border)]/80 bg-white/86 px-5 py-4 shadow-[var(--shadow-panel)]">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-muted-foreground)]">
+                      Assistant
+                    </p>
+                    <AssistantMessage answer={message.answer} content={message.content} />
+                  </div>
                 </div>
-              </div>
-              <div className="grid gap-2">
-                {history.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => runQuestion(item)}
-                    disabled={isLoading}
-                    className="rounded-[calc(var(--radius)*1.05)] bg-[var(--color-secondary)]/72 px-3.5 py-2.5 text-left text-sm text-[var(--color-foreground)] hover:bg-[var(--color-secondary)]"
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </aside>
+              ),
+            )}
 
-      <div aria-live="polite" className="grid gap-6">
-        {isLoading ? (
-          <QueryResultLoader />
+            {isLoading ? (
+              <AssistantReplyLoader />
+            ) : null}
+            <div ref={bottomAnchorRef} />
+          </div>
         ) : (
-          <>
-            <AiAnswerCard answer={result.answer} mode={result.mode} />
-            <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_420px]">
-              <Card>
-                <CardHeader className="gap-1">
-                  <CardTitle>{result.answer.chart.title}</CardTitle>
-                  <CardDescription>
-                    {result.answer.chart.subtitle ??
-                      "Chart-backed evidence for the active answer."}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <SupportingChart chart={result.answer.chart} />
-                </CardContent>
-              </Card>
-
-              <QueryGroundingCard grounding={result.grounding} />
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
+              <Sparkles className="h-6 w-6" />
             </div>
-          </>
+            <h2 className="mt-6 text-3xl font-semibold tracking-[-0.05em] text-[var(--color-foreground)] md:text-4xl">
+              Bridgewater Operations Chat
+            </h2>
+            <p className="mt-3 max-w-2xl text-base leading-8 text-[var(--color-muted-foreground)]">
+              Ask about plant risk, scrap, OTIF, inventory, downtime, or any cross-network operating question.
+            </p>
+          </div>
         )}
       </div>
-    </div>
+
+      <div className="border-t border-[var(--color-border)]/75 px-5 py-4 md:px-7">
+        <form
+          className="space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitQuestion(draft);
+          }}
+        >
+          <Textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Ask a Bridgewater operations question..."
+            aria-label="Operations question"
+            disabled={isLoading}
+            className="min-h-[120px] resize-none rounded-[1.6rem] bg-white/84 px-4 py-4 shadow-[var(--shadow-panel)]"
+          />
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <Button type="submit" size="lg" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <SendHorizonal className="h-4 w-4" />
+                  Send
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </section>
   );
 }

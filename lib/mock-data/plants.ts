@@ -5,6 +5,17 @@ import type {
   TimeSeriesPoint,
 } from "@/lib/types";
 
+type MetricSeriesKey = Exclude<keyof TimeSeriesPoint, "label">;
+
+interface MetricSeriesDefinition {
+  checkpoints: Array<[index: number, value: number]>;
+  amplitude?: number;
+  pattern?: number[];
+  min?: number;
+  max?: number;
+  digits?: number;
+}
+
 export const PLANTS: Plant[] = [
   {
     id: "plant-1",
@@ -52,98 +63,365 @@ export const PLANTS: Plant[] = [
   },
 ];
 
-const LABELS = [
-  "Apr 2",
-  "Apr 3",
-  "Apr 4",
-  "Apr 5",
-  "Apr 6",
-  "Apr 7",
-  "Apr 8",
-  "Apr 9",
-  "Apr 10",
-  "Apr 11",
-  "Apr 12",
-  "Apr 13",
-  "Apr 14",
-  "Apr 15",
-];
+const SERIES_LENGTH = 60;
+const LABEL_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+const START_DATE = new Date(Date.UTC(2026, 1, 15));
 
-function buildSeries(
-  labels: string[],
-  raw: Omit<TimeSeriesPoint, "label">[],
-): TimeSeriesPoint[] {
-  return raw.map((point, index) => ({
-    label: labels[index],
-    ...point,
+const LABELS = Array.from({ length: SERIES_LENGTH }, (_, index) => {
+  const date = new Date(START_DATE);
+  date.setUTCDate(START_DATE.getUTCDate() + index);
+  return LABEL_FORMATTER.format(date);
+});
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function roundTo(value: number, digits: number) {
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+
+function interpolateValue(
+  index: number,
+  checkpoints: Array<[index: number, value: number]>,
+) {
+  if (index <= checkpoints[0][0]) {
+    return checkpoints[0][1];
+  }
+
+  const lastCheckpoint = checkpoints[checkpoints.length - 1];
+
+  if (index >= lastCheckpoint[0]) {
+    return lastCheckpoint[1];
+  }
+
+  for (let cursor = 0; cursor < checkpoints.length - 1; cursor += 1) {
+    const [startIndex, startValue] = checkpoints[cursor];
+    const [endIndex, endValue] = checkpoints[cursor + 1];
+
+    if (index >= startIndex && index <= endIndex) {
+      const progress = (index - startIndex) / (endIndex - startIndex);
+      return startValue + (endValue - startValue) * progress;
+    }
+  }
+
+  return lastCheckpoint[1];
+}
+
+function buildMetricSeries(
+  definition: MetricSeriesDefinition,
+  length = SERIES_LENGTH,
+) {
+  const pattern = definition.pattern ?? [0, 1, -1, 2, -2, 1, 0, -1];
+  const amplitude = definition.amplitude ?? 0;
+  const digits = definition.digits ?? 3;
+
+  return Array.from({ length }, (_, index) => {
+    const base = interpolateValue(index, definition.checkpoints);
+    const wiggle = pattern[index % pattern.length] * amplitude;
+    const adjusted = clamp(
+      base + wiggle,
+      definition.min ?? Number.NEGATIVE_INFINITY,
+      definition.max ?? Number.POSITIVE_INFINITY,
+    );
+
+    return roundTo(adjusted, digits);
+  });
+}
+
+function buildPlantSeries(
+  definitions: Record<MetricSeriesKey, MetricSeriesDefinition>,
+) {
+  const metricSeries = {
+    oee: buildMetricSeries(definitions.oee),
+    scrapRate: buildMetricSeries(definitions.scrapRate),
+    otif: buildMetricSeries(definitions.otif),
+    inventoryHealth: buildMetricSeries(definitions.inventoryHealth),
+    downtime: buildMetricSeries(definitions.downtime),
+  };
+
+  return LABELS.map((label, index) => ({
+    label,
+    oee: metricSeries.oee[index],
+    scrapRate: metricSeries.scrapRate[index],
+    otif: metricSeries.otif[index],
+    inventoryHealth: metricSeries.inventoryHealth[index],
+    downtime: metricSeries.downtime[index],
   }));
 }
 
+const OXFORD_PATTERN = [0, 1, -1, 2, -2, 1, 0, -1, 1, -1];
+const WARREN_PATTERN = [0, -1, 1, -2, 2, -1, 1, 0];
+const LANSING_PATTERN = [0, 1, 0, -1, 1, 0, -1, 0];
+const DETROIT_PATTERN = [0, 2, -1, 1, -2, 1, 0, -1];
+
 export const PLANT_TIME_SERIES: Record<string, TimeSeriesPoint[]> = {
-  "plant-1": buildSeries(LABELS, [
-    { oee: 0.79, scrapRate: 0.034, otif: 0.92, inventoryHealth: 0.86, downtime: 87 },
-    { oee: 0.8, scrapRate: 0.033, otif: 0.92, inventoryHealth: 0.86, downtime: 85 },
-    { oee: 0.81, scrapRate: 0.033, otif: 0.93, inventoryHealth: 0.87, downtime: 82 },
-    { oee: 0.8, scrapRate: 0.032, otif: 0.93, inventoryHealth: 0.87, downtime: 84 },
-    { oee: 0.81, scrapRate: 0.032, otif: 0.93, inventoryHealth: 0.87, downtime: 80 },
-    { oee: 0.82, scrapRate: 0.031, otif: 0.94, inventoryHealth: 0.88, downtime: 78 },
-    { oee: 0.82, scrapRate: 0.031, otif: 0.94, inventoryHealth: 0.88, downtime: 76 },
-    { oee: 0.81, scrapRate: 0.031, otif: 0.94, inventoryHealth: 0.88, downtime: 79 },
-    { oee: 0.82, scrapRate: 0.03, otif: 0.94, inventoryHealth: 0.89, downtime: 75 },
-    { oee: 0.83, scrapRate: 0.03, otif: 0.95, inventoryHealth: 0.89, downtime: 72 },
-    { oee: 0.82, scrapRate: 0.029, otif: 0.95, inventoryHealth: 0.89, downtime: 74 },
-    { oee: 0.83, scrapRate: 0.029, otif: 0.95, inventoryHealth: 0.9, downtime: 70 },
-    { oee: 0.84, scrapRate: 0.028, otif: 0.95, inventoryHealth: 0.9, downtime: 68 },
-    { oee: 0.84, scrapRate: 0.028, otif: 0.96, inventoryHealth: 0.9, downtime: 69 },
-  ]),
-  "plant-2": buildSeries(LABELS, [
-    { oee: 0.77, scrapRate: 0.041, otif: 0.91, inventoryHealth: 0.82, downtime: 102 },
-    { oee: 0.76, scrapRate: 0.042, otif: 0.91, inventoryHealth: 0.82, downtime: 105 },
-    { oee: 0.75, scrapRate: 0.043, otif: 0.9, inventoryHealth: 0.81, downtime: 107 },
-    { oee: 0.74, scrapRate: 0.044, otif: 0.9, inventoryHealth: 0.81, downtime: 110 },
-    { oee: 0.74, scrapRate: 0.045, otif: 0.89, inventoryHealth: 0.8, downtime: 111 },
-    { oee: 0.73, scrapRate: 0.046, otif: 0.89, inventoryHealth: 0.8, downtime: 114 },
-    { oee: 0.72, scrapRate: 0.047, otif: 0.88, inventoryHealth: 0.79, downtime: 118 },
-    { oee: 0.71, scrapRate: 0.048, otif: 0.88, inventoryHealth: 0.79, downtime: 121 },
-    { oee: 0.7, scrapRate: 0.049, otif: 0.87, inventoryHealth: 0.79, downtime: 125 },
-    { oee: 0.7, scrapRate: 0.05, otif: 0.87, inventoryHealth: 0.78, downtime: 126 },
-    { oee: 0.69, scrapRate: 0.051, otif: 0.86, inventoryHealth: 0.78, downtime: 129 },
-    { oee: 0.68, scrapRate: 0.053, otif: 0.86, inventoryHealth: 0.77, downtime: 133 },
-    { oee: 0.67, scrapRate: 0.054, otif: 0.85, inventoryHealth: 0.77, downtime: 137 },
-    { oee: 0.66, scrapRate: 0.056, otif: 0.85, inventoryHealth: 0.76, downtime: 141 },
-  ]),
-  "plant-3": buildSeries(LABELS, [
-    { oee: 0.84, scrapRate: 0.029, otif: 0.95, inventoryHealth: 0.88, downtime: 72 },
-    { oee: 0.84, scrapRate: 0.029, otif: 0.95, inventoryHealth: 0.88, downtime: 70 },
-    { oee: 0.84, scrapRate: 0.028, otif: 0.95, inventoryHealth: 0.88, downtime: 69 },
-    { oee: 0.85, scrapRate: 0.028, otif: 0.94, inventoryHealth: 0.89, downtime: 68 },
-    { oee: 0.85, scrapRate: 0.028, otif: 0.94, inventoryHealth: 0.89, downtime: 67 },
-    { oee: 0.85, scrapRate: 0.027, otif: 0.94, inventoryHealth: 0.89, downtime: 66 },
-    { oee: 0.86, scrapRate: 0.027, otif: 0.93, inventoryHealth: 0.89, downtime: 66 },
-    { oee: 0.86, scrapRate: 0.027, otif: 0.93, inventoryHealth: 0.9, downtime: 65 },
-    { oee: 0.86, scrapRate: 0.027, otif: 0.93, inventoryHealth: 0.9, downtime: 64 },
-    { oee: 0.86, scrapRate: 0.026, otif: 0.92, inventoryHealth: 0.9, downtime: 64 },
-    { oee: 0.87, scrapRate: 0.026, otif: 0.92, inventoryHealth: 0.9, downtime: 63 },
-    { oee: 0.87, scrapRate: 0.026, otif: 0.91, inventoryHealth: 0.91, downtime: 62 },
-    { oee: 0.87, scrapRate: 0.026, otif: 0.91, inventoryHealth: 0.91, downtime: 61 },
-    { oee: 0.88, scrapRate: 0.026, otif: 0.9, inventoryHealth: 0.91, downtime: 60 },
-  ]),
-  "plant-4": buildSeries(LABELS, [
-    { oee: 0.8, scrapRate: 0.035, otif: 0.93, inventoryHealth: 0.79, downtime: 91 },
-    { oee: 0.8, scrapRate: 0.036, otif: 0.93, inventoryHealth: 0.79, downtime: 89 },
-    { oee: 0.79, scrapRate: 0.036, otif: 0.93, inventoryHealth: 0.78, downtime: 92 },
-    { oee: 0.79, scrapRate: 0.037, otif: 0.92, inventoryHealth: 0.78, downtime: 90 },
-    { oee: 0.8, scrapRate: 0.037, otif: 0.92, inventoryHealth: 0.77, downtime: 92 },
-    { oee: 0.8, scrapRate: 0.038, otif: 0.92, inventoryHealth: 0.77, downtime: 94 },
-    { oee: 0.79, scrapRate: 0.038, otif: 0.92, inventoryHealth: 0.76, downtime: 95 },
-    { oee: 0.79, scrapRate: 0.037, otif: 0.91, inventoryHealth: 0.75, downtime: 93 },
-    { oee: 0.8, scrapRate: 0.037, otif: 0.91, inventoryHealth: 0.74, downtime: 96 },
-    { oee: 0.8, scrapRate: 0.038, otif: 0.91, inventoryHealth: 0.74, downtime: 95 },
-    { oee: 0.81, scrapRate: 0.039, otif: 0.91, inventoryHealth: 0.73, downtime: 97 },
-    { oee: 0.81, scrapRate: 0.039, otif: 0.9, inventoryHealth: 0.72, downtime: 98 },
-    { oee: 0.8, scrapRate: 0.04, otif: 0.9, inventoryHealth: 0.72, downtime: 96 },
-    { oee: 0.8, scrapRate: 0.039, otif: 0.9, inventoryHealth: 0.71, downtime: 97 },
-  ]),
+  "plant-1": buildPlantSeries({
+    oee: {
+      checkpoints: [
+        [0, 0.724],
+        [8, 0.742],
+        [18, 0.77],
+        [28, 0.798],
+        [40, 0.832],
+        [59, 0.858],
+      ],
+      amplitude: 0.003,
+      pattern: OXFORD_PATTERN,
+      min: 0.7,
+      max: 0.9,
+    },
+    scrapRate: {
+      checkpoints: [
+        [0, 0.047],
+        [8, 0.045],
+        [18, 0.04],
+        [28, 0.034],
+        [40, 0.029],
+        [59, 0.027],
+      ],
+      amplitude: 0.0005,
+      pattern: OXFORD_PATTERN,
+      min: 0.024,
+      max: 0.055,
+    },
+    otif: {
+      checkpoints: [
+        [0, 0.894],
+        [18, 0.91],
+        [32, 0.934],
+        [59, 0.958],
+      ],
+      amplitude: 0.002,
+      pattern: OXFORD_PATTERN,
+      min: 0.87,
+      max: 0.97,
+    },
+    inventoryHealth: {
+      checkpoints: [
+        [0, 0.78],
+        [18, 0.82],
+        [36, 0.875],
+        [59, 0.905],
+      ],
+      amplitude: 0.002,
+      pattern: OXFORD_PATTERN,
+      min: 0.75,
+      max: 0.93,
+    },
+    downtime: {
+      checkpoints: [
+        [0, 124],
+        [8, 116],
+        [18, 102],
+        [28, 88],
+        [40, 72],
+        [59, 66],
+      ],
+      amplitude: 1.8,
+      pattern: OXFORD_PATTERN,
+      min: 58,
+      max: 130,
+      digits: 0,
+    },
+  }),
+  "plant-2": buildPlantSeries({
+    oee: {
+      checkpoints: [
+        [0, 0.79],
+        [15, 0.75],
+        [30, 0.71],
+        [45, 0.68],
+        [59, 0.65],
+      ],
+      amplitude: 0.003,
+      pattern: WARREN_PATTERN,
+      min: 0.62,
+      max: 0.82,
+    },
+    scrapRate: {
+      checkpoints: [
+        [0, 0.039],
+        [15, 0.044],
+        [30, 0.048],
+        [45, 0.053],
+        [59, 0.057],
+      ],
+      amplitude: 0.0007,
+      pattern: WARREN_PATTERN,
+      min: 0.036,
+      max: 0.06,
+    },
+    otif: {
+      checkpoints: [
+        [0, 0.92],
+        [20, 0.89],
+        [40, 0.86],
+        [59, 0.84],
+      ],
+      amplitude: 0.002,
+      pattern: WARREN_PATTERN,
+      min: 0.82,
+      max: 0.93,
+    },
+    inventoryHealth: {
+      checkpoints: [
+        [0, 0.84],
+        [20, 0.81],
+        [40, 0.77],
+        [59, 0.74],
+      ],
+      amplitude: 0.002,
+      pattern: WARREN_PATTERN,
+      min: 0.72,
+      max: 0.86,
+    },
+    downtime: {
+      checkpoints: [
+        [0, 96],
+        [15, 110],
+        [30, 123],
+        [45, 136],
+        [59, 148],
+      ],
+      amplitude: 2.2,
+      pattern: WARREN_PATTERN,
+      min: 90,
+      max: 155,
+      digits: 0,
+    },
+  }),
+  "plant-3": buildPlantSeries({
+    oee: {
+      checkpoints: [
+        [0, 0.83],
+        [20, 0.85],
+        [40, 0.87],
+        [59, 0.885],
+      ],
+      amplitude: 0.0025,
+      pattern: LANSING_PATTERN,
+      min: 0.81,
+      max: 0.9,
+    },
+    scrapRate: {
+      checkpoints: [
+        [0, 0.031],
+        [20, 0.028],
+        [40, 0.026],
+        [59, 0.025],
+      ],
+      amplitude: 0.0004,
+      pattern: LANSING_PATTERN,
+      min: 0.023,
+      max: 0.033,
+    },
+    otif: {
+      checkpoints: [
+        [0, 0.955],
+        [20, 0.948],
+        [40, 0.925],
+        [59, 0.892],
+      ],
+      amplitude: 0.0018,
+      pattern: LANSING_PATTERN,
+      min: 0.885,
+      max: 0.96,
+    },
+    inventoryHealth: {
+      checkpoints: [
+        [0, 0.87],
+        [20, 0.89],
+        [40, 0.905],
+        [59, 0.915],
+      ],
+      amplitude: 0.0015,
+      pattern: LANSING_PATTERN,
+      min: 0.86,
+      max: 0.92,
+    },
+    downtime: {
+      checkpoints: [
+        [0, 74],
+        [20, 68],
+        [40, 63],
+        [59, 58],
+      ],
+      amplitude: 1.4,
+      pattern: LANSING_PATTERN,
+      min: 54,
+      max: 78,
+      digits: 0,
+    },
+  }),
+  "plant-4": buildPlantSeries({
+    oee: {
+      checkpoints: [
+        [0, 0.825],
+        [25, 0.818],
+        [40, 0.806],
+        [59, 0.798],
+      ],
+      amplitude: 0.0025,
+      pattern: DETROIT_PATTERN,
+      min: 0.78,
+      max: 0.84,
+    },
+    scrapRate: {
+      checkpoints: [
+        [0, 0.034],
+        [25, 0.036],
+        [40, 0.039],
+        [59, 0.041],
+      ],
+      amplitude: 0.0005,
+      pattern: DETROIT_PATTERN,
+      min: 0.032,
+      max: 0.043,
+    },
+    otif: {
+      checkpoints: [
+        [0, 0.95],
+        [25, 0.94],
+        [40, 0.91],
+        [59, 0.888],
+      ],
+      amplitude: 0.0018,
+      pattern: DETROIT_PATTERN,
+      min: 0.88,
+      max: 0.955,
+    },
+    inventoryHealth: {
+      checkpoints: [
+        [0, 0.89],
+        [25, 0.86],
+        [40, 0.78],
+        [59, 0.695],
+      ],
+      amplitude: 0.002,
+      pattern: DETROIT_PATTERN,
+      min: 0.68,
+      max: 0.9,
+    },
+    downtime: {
+      checkpoints: [
+        [0, 78],
+        [25, 82],
+        [40, 94],
+        [59, 102],
+      ],
+      amplitude: 1.8,
+      pattern: DETROIT_PATTERN,
+      min: 74,
+      max: 106,
+      digits: 0,
+    },
+  }),
 };
 
 export const PLANT_DOWNTIME_MIX: Record<string, DowntimeBucket[]> = {

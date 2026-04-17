@@ -6,6 +6,7 @@ import {
   PLANT_TIME_SERIES,
 } from "@/lib/mock-data/plants";
 import { QUERY_PRESETS } from "@/lib/mock-data/query-responses";
+import { formatMetricValue, severityLabel } from "@/lib/format";
 import { METRIC_META } from "@/lib/site";
 import type {
   AiAnswer,
@@ -39,8 +40,8 @@ const RANGE_WINDOWS: Record<TimeRange, number> = {
   today: 1,
   yesterday: 1,
   last_7_days: 7,
-  last_30_days: 14,
-  month_to_date: 14,
+  last_30_days: 30,
+  month_to_date: 15,
 };
 
 const OVERVIEW_INSIGHTS: InsightCard[] = [
@@ -140,6 +141,10 @@ function average(values: number[]) {
 function round(value: number, digits = 3) {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
+}
+
+function clamp(value: number, min = 0, max = 1) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function getWindow(points: TimeSeriesPoint[], timeRange: TimeRange) {
@@ -275,16 +280,22 @@ function buildComparisonRow(plant: Plant, timeRange: TimeRange): ComparisonRow {
     return total + weightMap[alert.severity];
   }, 0);
 
-  const riskIndex = Math.min(
-    100,
-    Math.round(
-      (1 - summary.oee.value) * 30 +
-        summary.scrapRate.value * 900 +
-        (1 - summary.otif.value) * 180 +
-        (1 - summary.inventoryHealth.value) * 120 +
-        (summary.downtime.value / 160) * 55 +
-        severityWeight,
-    ),
+  const oeePenalty = clamp((0.9 - summary.oee.value) / 0.22);
+  const scrapPenalty = clamp((summary.scrapRate.value - 0.024) / 0.036);
+  const otifPenalty = clamp((0.97 - summary.otif.value) / 0.11);
+  const inventoryPenalty = clamp((0.9 - summary.inventoryHealth.value) / 0.22);
+  const downtimePenalty = clamp((summary.downtime.value - 60) / 90);
+  const alertPenalty = clamp(severityWeight / 45);
+
+  const riskIndex = Math.round(
+    (
+      oeePenalty * 0.24 +
+      scrapPenalty * 0.22 +
+      otifPenalty * 0.18 +
+      inventoryPenalty * 0.18 +
+      downtimePenalty * 0.12 +
+      alertPenalty * 0.06
+    ) * 100,
   );
 
   return {
@@ -454,7 +465,17 @@ function mentionsPlant(normalized: string, plantId: string) {
 function matchesPresetIntent(normalized: string, presetId: string) {
   switch (presetId) {
     case "attention-first":
-      return normalized.includes("attention") && !mentionsPlant(normalized, "plant-2");
+      return (
+        (
+          normalized.includes("attention") ||
+          normalized.includes("most risk") ||
+          normalized.includes("highest risk") ||
+          normalized.includes("top risk") ||
+          normalized.includes("needs attention") ||
+          (normalized.includes("risk") && normalized.includes("right now"))
+        ) &&
+        !mentionsPlant(normalized, "plant-2")
+      );
     case "plant-2-oee":
       return mentionsPlant(normalized, "plant-2") && normalized.includes("oee");
     case "plant-2-loss-drivers":
@@ -492,6 +513,125 @@ function matchesPresetIntent(normalized: string, presetId: string) {
   }
 }
 
+function buildPlantFallbackAnswer(
+  question: string,
+  plantId: string,
+  timeRange: TimeRange,
+): AiAnswer | null {
+  const detail = getPlantDetail(plantId, timeRange);
+
+  if (!detail) {
+    return null;
+  }
+
+  const firstTrend = detail.trends[0];
+  const lastTrend = detail.trends.at(-1) ?? firstTrend;
+  const topAlert = detail.alerts[0];
+  const topInventorySignal = detail.inventorySignals[0];
+  const topDowntimeBucket = [...detail.downtimeMix].sort(
+    (left, right) => right.minutes - left.minutes,
+  )[0];
+
+  return {
+    question,
+    summary: `${detail.plant.name} is currently running at OEE ${formatMetricValue("oee", detail.kpis.oee.value)}, scrap ${formatMetricValue("scrapRate", detail.kpis.scrapRate.value)}, OTIF ${formatMetricValue("otif", detail.kpis.otif.value)}, inventory health ${formatMetricValue("inventoryHealth", detail.kpis.inventoryHealth.value)}, and downtime ${formatMetricValue("downtime", detail.kpis.downtime.value)}. ${topAlert ? `${topAlert.title} is the highest-priority active issue at the site.` : `${detail.plant.name} does not have a dominating active alert, but it still needs watch on its weakest operating signals.`}`,
+    insights: [
+      `${detail.plant.name} moved from OEE ${formatMetricValue("oee", firstTrend.oee)} to ${formatMetricValue("oee", lastTrend.oee)} while downtime moved from ${formatMetricValue("downtime", firstTrend.downtime)} to ${formatMetricValue("downtime", lastTrend.downtime)} across the current operating view.`,
+      topAlert
+        ? `${severityLabel(topAlert.severity)} alert: ${topAlert.summary} Primary drivers are ${topAlert.drivers.join(", ")}.`
+        : `${topInventorySignal.label} is at ${topInventorySignal.value}${topInventorySignal.unit === "%" ? "%" : ""} against a target of ${topInventorySignal.target}${topInventorySignal.unit === "%" ? "%" : ""}, and ${topInventorySignal.narrative.toLowerCase()}`,
+      `${topDowntimeBucket.category} is the largest downtime bucket at ${detail.plant.name} with ${topDowntimeBucket.minutes} minutes, which helps explain why ${detail.kpis.downtime.narrative.toLowerCase()}`,
+    ],
+    context: {
+      timeRange,
+      plants: [detail.plant.name],
+      sources: detail.sources,
+    },
+    chart: {
+      type: "line",
+      title: `${detail.plant.name} operating trend`,
+      subtitle: "Value tracks OEE while the baseline tracks downtime minutes.",
+      series: detail.trends.slice(-Math.min(7, detail.trends.length)).map((point) => ({
+        label: point.label,
+        value: point.oee,
+        baseline: Math.round(point.downtime),
+      })),
+    },
+    confidence: topAlert ? "high" : "medium",
+    recommendedActions: topAlert
+      ? [
+          `Contain ${detail.plant.name}'s highest-loss issue by addressing ${topAlert.drivers.slice(0, 2).join(" and ")} first.`,
+          `Keep daily review on ${detail.plant.name} inventory balance and downtime so the current alert does not expand into service risk.`,
+        ]
+      : [
+          `Keep ${detail.plant.name} focused on ${topInventorySignal.label.toLowerCase()} and ${topDowntimeBucket.category.toLowerCase()} so the site does not drift into a new alert cycle.`,
+        ],
+  };
+}
+
+function buildNetworkFallbackAnswer(
+  question: string,
+  plantIds: string[],
+  timeRange: TimeRange,
+): AiAnswer {
+  const overview = getOverviewData(timeRange);
+  const scopedComparison =
+    plantIds.length > 0
+      ? overview.comparison.filter((row) => plantIds.includes(row.plantId))
+      : overview.comparison;
+  const comparison = scopedComparison.length > 0 ? scopedComparison : overview.comparison;
+  const comparisonByOee = [...comparison].sort((left, right) => right.oee - left.oee);
+  const comparisonByOtif = [...comparison].sort((left, right) => left.otif - right.otif);
+  const comparisonByInventory = [...comparison].sort(
+    (left, right) => left.inventoryHealth - right.inventoryHealth,
+  );
+  const comparisonByScrap = [...comparison].sort(
+    (left, right) => right.scrapRate - left.scrapRate,
+  );
+  const topRisk = comparison[0];
+  const benchmarkPlant = comparisonByOee[0];
+  const serviceWatchPlant = comparisonByOtif[0];
+  const inventoryWatchPlant = comparisonByInventory[0];
+  const scrapWatchPlant = comparisonByScrap[0];
+  const scopedAlerts = getAlerts().filter(
+    (alert) => plantIds.length === 0 || plantIds.includes(alert.plantId),
+  );
+  const topAlerts = scopedAlerts.slice(0, 2);
+
+  return {
+    question,
+    summary: `${topRisk.plantName} is carrying the most operational pressure in the Bridgewater network at a risk index of ${topRisk.riskIndex}, with OEE ${formatMetricValue("oee", topRisk.oee)}, scrap ${formatMetricValue("scrapRate", topRisk.scrapRate)}, and ${topRisk.activeAlerts} active alerts. ${benchmarkPlant.plantName} remains the benchmark facility, while ${inventoryWatchPlant.plantName} is the main inventory watch.`,
+    insights: [
+      `${scrapWatchPlant.plantName} has the heaviest scrap exposure at ${formatMetricValue("scrapRate", scrapWatchPlant.scrapRate)}, while ${benchmarkPlant.plantName} is leading network OEE at ${formatMetricValue("oee", benchmarkPlant.oee)}.`,
+      `${serviceWatchPlant.plantName} has the softest OTIF at ${formatMetricValue("otif", serviceWatchPlant.otif)}, which keeps service execution risk on watch even when line output is stronger elsewhere.`,
+      topAlerts.length > 0
+        ? `The most urgent active alerts are ${topAlerts.map((alert) => `${alert.plantName}: ${alert.title}`).join(" and ")}.`
+        : "The network does not have a single dominant alert cluster right now, so the watch should stay on cross-facility trend drift.",
+    ],
+    context: {
+      timeRange,
+      plants: comparison.map((row) => row.plantName),
+      sources: ["MES", "ERP", "CMMS"],
+    },
+    chart: {
+      type: "bar",
+      title: "Bridgewater facility risk comparison",
+      subtitle: "Higher score indicates more operational attention required.",
+      series: comparison.map((row) => ({
+        label: row.plantName,
+        value: row.riskIndex,
+      })),
+    },
+    confidence: topAlerts.some((alert) => alert.severity === "critical") ? "high" : "medium",
+    recommendedActions: [
+      `Stabilize ${topRisk.plantName} first by attacking its highest-loss downtime and scrap drivers before the next shift transition.`,
+      inventoryWatchPlant.plantId !== topRisk.plantId
+        ? `Rebalance material coverage and transfer flow in ${inventoryWatchPlant.plantName} so inventory friction does not become the next service miss driver.`
+        : `Keep material coverage, scrap containment, and planner recovery tightly linked at ${topRisk.plantName}.`,
+    ],
+  };
+}
+
 export function answerQuestion(
   question: string,
   options?: { timeRange?: TimeRange; plantIds?: string[] },
@@ -522,33 +662,15 @@ export function answerQuestion(
     resolvedPlantIds.length > 0
       ? resolvedPlantIds
       : PLANTS.map((plant) => plant.id);
+  const fallbackTimeRange = options?.timeRange ?? "last_30_days";
+  const plantFallback =
+    fallbackPlantIds.length === 1
+      ? buildPlantFallbackAnswer(question, fallbackPlantIds[0], fallbackTimeRange)
+      : null;
 
-  return {
-    question,
-    summary:
-      `I could not match that request to a strong Bridgewater storyline yet, but the strongest current story is still ${WARREN}'s combined downtime and scrap deterioration.`,
-    insights: [
-      `Try asking about ${WARREN} OEE, ${LANSING} OTIF softness, ${DETROIT} inventory risk, or cross-facility scrap.`,
-      "The query layer stays tuned to Bridgewater-specific facility, KPI, and alert context so the answer remains grounded.",
-    ],
-    context: {
-      timeRange: options?.timeRange ?? "last_7_days",
-      plants: fallbackPlantIds
-        .map((plantId) => getPlantById(plantId)?.name)
-        .filter((plantName): plantName is string => Boolean(plantName)),
-      sources: ["MES", "ERP", "CMMS"],
-    },
-    chart: {
-      type: "bar",
-      title: "Current Facility Risk Snapshot",
-      series: getOverviewData("today").comparison.map((row) => ({
-        label: row.plantName,
-        value: row.riskIndex,
-      })),
-    },
-    confidence: "low",
-    recommendedActions: [
-      "Use one of the suggested prompts so the workspace can return a more fully grounded answer.",
-    ],
-  };
+  if (plantFallback) {
+    return plantFallback;
+  }
+
+  return buildNetworkFallbackAnswer(question, fallbackPlantIds, fallbackTimeRange);
 }
