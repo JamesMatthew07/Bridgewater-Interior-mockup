@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { LoaderCircle, SendHorizonal, Sparkles } from "lucide-react";
+import { ArrowUpRight, LoaderCircle, SendHorizonal, Sparkles } from "lucide-react";
 
 import { buildFallbackQueryResponse } from "@/lib/ai/query-context";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,29 @@ interface ChatMessage {
   content: string;
   answer?: AiAnswer;
 }
+
+const STARTER_PROMPTS = [
+  {
+    id: "attention-first",
+    label: "Network priority",
+    question: "Which Bridgewater facility needs attention first today?",
+  },
+  {
+    id: "warren-oee",
+    label: "Warren performance",
+    question: "Why did Warren OEE drop yesterday?",
+  },
+  {
+    id: "detroit-inventory",
+    label: "Detroit inventory",
+    question: "Why is inventory health weakening in Detroit?",
+  },
+  {
+    id: "otif-risk",
+    label: "Service risk",
+    question: "Which Bridgewater orders are most at risk of missing OTIF targets?",
+  },
+] as const;
 
 function AssistantReplyLoader() {
   return (
@@ -303,6 +326,34 @@ export function QueryWorkbench({
             <p className="mt-3 max-w-2xl text-base leading-8 text-[var(--color-muted-foreground)]">
               Ask about plant risk, scrap, OTIF, inventory, downtime, or any cross-network operating question.
             </p>
+            <div className="mt-8 grid w-full max-w-4xl gap-3 sm:grid-cols-2">
+              {STARTER_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt.id}
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => {
+                    submitQuestion(prompt.question, {
+                      clearThread: true,
+                    });
+                  }}
+                  className="group flex min-h-[148px] items-center justify-center rounded-[1.5rem] border border-[var(--color-border)]/75 bg-white/84 px-5 py-4 text-center shadow-[var(--shadow-panel)] transition-all hover:-translate-y-0.5 hover:border-[var(--color-primary)]/25 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                >
+                  <div className="flex max-w-[28rem] flex-col items-center gap-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-muted-foreground)]">
+                      {prompt.label}
+                    </p>
+                    <p className="text-sm leading-6 text-[var(--color-foreground)] sm:text-lg sm:leading-7">
+                      {prompt.question}
+                    </p>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-secondary)]/72 px-3 py-1 text-xs font-medium text-[var(--color-muted-foreground)] transition-colors group-hover:bg-[var(--color-secondary)] group-hover:text-[var(--color-primary)]">
+                      Ask this question
+                      <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>

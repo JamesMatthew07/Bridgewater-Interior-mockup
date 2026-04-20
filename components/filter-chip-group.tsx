@@ -1,7 +1,19 @@
-import Link from "next/link";
+"use client";
 
+import { useRouter } from "next/navigation";
+
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { buildHref, type SearchParamsInput } from "@/lib/url-state";
-import { cn } from "@/lib/utils";
+
+const ALL_OPTION_VALUE = "__all__";
 
 export function FilterChipGroup({
   label,
@@ -18,33 +30,48 @@ export function FilterChipGroup({
   value?: string;
   options: Array<{ label: string; value?: string }>;
 }) {
+  const router = useRouter();
+  const selectedValue = value ?? ALL_OPTION_VALUE;
+
   return (
     <div className="space-y-2">
       <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-muted-foreground)]">
         {label}
       </p>
-      <div className="flex flex-wrap gap-2 rounded-[calc(var(--radius)*1.15)] border border-[var(--color-border)]/80 bg-white/62 p-1.5 shadow-[var(--shadow-panel)]">
-        {options.map((option) => {
-          const active = option.value === value || (!option.value && !value);
-
-          return (
-            <Link
-              key={`${queryKey}-${option.label}`}
-              href={buildHref(pathname, searchParams, {
-                [queryKey]: option.value,
-              })}
-              className={cn(
-                "rounded-full px-3.5 py-2 text-sm font-medium",
-                active
-                  ? "bg-[var(--color-primary)] !text-white shadow-[0_14px_28px_-24px_rgba(24,59,90,0.95)] hover:!text-white focus:!text-white active:!text-white visited:!text-white"
-                  : "text-[var(--color-muted-foreground)] hover:bg-[var(--color-secondary)] hover:text-[var(--color-foreground)]",
-              )}
-            >
-              {option.label}
-            </Link>
+      <Select
+        value={selectedValue}
+        onValueChange={(nextValue) => {
+          router.replace(
+            buildHref(pathname, searchParams, {
+              [queryKey]:
+                nextValue === ALL_OPTION_VALUE ? undefined : nextValue,
+            }),
+            { scroll: false },
           );
-        })}
-      </div>
+        }}
+      >
+        <SelectTrigger
+          aria-label={`${label} filters`}
+          className="w-full bg-white/78"
+        >
+          <span className="min-w-0 truncate">
+            <SelectValue />
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectLabel>{label}</SelectLabel>
+            {options.map((option) => (
+              <SelectItem
+                key={`${queryKey}-${option.label}`}
+                value={option.value ?? ALL_OPTION_VALUE}
+              >
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
     </div>
   );
 }

@@ -144,22 +144,6 @@ export function AppShell({
             })}
           </nav>
 
-          <div className="mt-8 space-y-3 rounded-[1.5rem] border border-[var(--color-border)]/80 bg-white/58 p-4 shadow-[var(--shadow-panel)]">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-muted-foreground)]">
-              Operating context
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {APP_CONTEXT_PILLS.map((pill) => (
-                <span
-                  key={pill}
-                  className="rounded-full border border-[var(--color-border)] bg-white/78 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted-foreground)]"
-                >
-                  {pill}
-                </span>
-              ))}
-            </div>
-          </div>
-
           <div className="mt-auto rounded-[1.6rem] border border-[var(--color-border)]/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(244,246,247,0.84))] p-4 shadow-[var(--shadow-panel)]">
             <div className="flex items-center gap-3">
               <span className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--color-risk-low)] shadow-[0_0_0_4px_rgba(89,121,101,0.12)]" />
