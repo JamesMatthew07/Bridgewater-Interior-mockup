@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 
 import { AlertFeed } from "@/components/alert-feed";
-import { RiskBarChart } from "@/components/charts/risk-bar-chart";
 import { KpiCard } from "@/components/kpi-card";
 import { PageHeader } from "@/components/page-header";
 import { PlantComparisonTable } from "@/components/plant-comparison-table";
@@ -228,31 +227,17 @@ export default async function OverviewPage({
         ))}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_420px]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Facility Comparison</CardTitle>
-            <CardDescription>
-              Bridgewater facility ranking by current KPI posture, active alerts, and attention scoring.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <PlantComparisonTable rows={data.comparison} timeRange={range} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Attention Score</CardTitle>
-            <CardDescription>
-              A simple index combining KPI softness and alert severity.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RiskBarChart data={data.comparison} />
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Facility Comparison</CardTitle>
+          <CardDescription>
+            Bridgewater facility ranking by current KPI posture, active alerts, and attention scoring.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PlantComparisonTable rows={data.comparison} timeRange={range} />
+        </CardContent>
+      </Card>
 
       <div className="space-y-1">
         <h2 className="text-lg font-semibold text-[var(--color-foreground)]">
