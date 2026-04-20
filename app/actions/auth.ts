@@ -41,7 +41,7 @@ export async function loginAction(
   } catch {
     return {
       email: rawEmail.trim(),
-      message: "Workspace access is not configured yet. Add AUTH_SECRET and try again.",
+      message: "We couldn't start your workspace session. Please try again.",
       fieldErrors: {},
     };
   }

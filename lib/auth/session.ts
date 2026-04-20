@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 export const SESSION_COOKIE_NAME = "bwi_demo_session";
 export const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -31,11 +31,21 @@ export type DemoCredentialValidationResult =
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET?.trim();
 
-  if (!secret) {
-    throw new Error("AUTH_SECRET is required to use demo auth.");
+  if (secret) {
+    return secret;
   }
 
-  return secret;
+  const fallbackSeed = [
+    process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    process.env.VERCEL_URL,
+    process.env.VERCEL_GIT_COMMIT_SHA,
+    process.env.VERCEL_GIT_REPO_SLUG,
+    "bridgewater-demo-auth",
+  ]
+    .filter(Boolean)
+    .join("|");
+
+  return createHash("sha256").update(fallbackSeed).digest("hex");
 }
 
 function signPayload(payload: string) {

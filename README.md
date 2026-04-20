@@ -41,6 +41,10 @@ Notes:
   and falls back to the seeded mock answers.
 - `OPENAI_BASE_URL` is optional and exists to support OpenAI-compatible
   providers.
+- `AUTH_SECRET` is optional for this demo auth flow. When present, it is used to
+  sign session cookies explicitly. When absent, the app falls back to a
+  deployment-stable demo signing secret so the workspace still works on fresh
+  Vercel projects.
 
 ## Included Routes
 

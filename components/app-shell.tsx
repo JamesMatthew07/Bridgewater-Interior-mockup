@@ -53,7 +53,7 @@ export function AppShell({
         <div className="px-5 py-5 xl:px-6 xl:py-6">
           <div className="rounded-[1.75rem] border border-white/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.84),rgba(242,245,247,0.62))] p-5 shadow-[var(--shadow-panel)]">
             <div className="space-y-5">
-              <div className="flex items-center justify-start rounded-[1.4rem] bg-[linear-gradient(135deg,#183b5a,#102c45)] px-4 py-4 shadow-[0_24px_50px_-28px_rgba(24,59,90,0.72)]">
+              <div className="flex items-center justify-center rounded-[1.4rem] bg-[linear-gradient(135deg,#183b5a,#102c45)] px-4 py-4 shadow-[0_24px_50px_-28px_rgba(24,59,90,0.72)]">
                 <Image
                   src="/bridgewater-logo-white.png"
                   alt="Bridgewater Interiors"
