@@ -270,8 +270,8 @@ export function QueryWorkbench({
   }, [messages, isLoading]);
 
   return (
-    <section className="mx-auto flex min-h-[calc(100svh-10rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-[var(--color-border)]/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(243,246,248,0.72))] shadow-[var(--shadow-app)]">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--color-border)]/75 px-5 py-4 md:px-7">
+    <section className="mx-auto flex h-[calc(100svh-10rem)] min-h-0 w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-[var(--color-border)]/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(243,246,248,0.72))] shadow-[var(--shadow-app)]">
+      <div className="shrink-0 flex flex-wrap items-center justify-between gap-4 border-b border-[var(--color-border)]/75 px-5 py-4 md:px-7">
         <div className="space-y-1">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-muted-foreground)]">
             Bridgewater AI Chat
@@ -282,7 +282,10 @@ export function QueryWorkbench({
         </div>
       </div>
 
-      <div aria-live="polite" className="flex-1 overflow-y-auto px-5 py-6 md:px-7">
+      <div
+        aria-live="polite"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6 md:px-7"
+      >
         {messages.length > 0 || isLoading ? (
           <div className="space-y-6">
             {messages.map((message) =>
@@ -358,7 +361,7 @@ export function QueryWorkbench({
         )}
       </div>
 
-      <div className="border-t border-[var(--color-border)]/75 px-5 py-4 md:px-7">
+      <div className="shrink-0 border-t border-[var(--color-border)]/75 px-5 py-4 md:px-7">
         <form
           className="space-y-3"
           onSubmit={(event) => {
